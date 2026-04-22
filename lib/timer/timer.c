@@ -1,5 +1,6 @@
 #include "timer.h"
 #include "gpio.h"
+#include "helpers.h"
 #include <avr/io.h>
 
 void timer0_init_fast_pwm(void)
