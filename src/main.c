@@ -1,33 +1,47 @@
+#include <util/delay.h>
+#include <stdio.h>
 #include "motor.h"
 #include "uart.h"
-#include <util/delay.h>
+#include "encoder.h"
+
+#define TICKS_FOR_90_DEG 10
 
 void init_system() {
     motor_init();
     uart_init(9600);
+    encoder_init();
 }
 
 int main()
 {
     init_system();
 
-    int i = 1;
+    char print_buffer[64];
     while (1) {
-        i *= -1;
-        // Example: Set left motor to 50% forward and right motor to 50% reverse
-        motor_set_speed(i*50, -50*i);
-        uart_send_string("Motors set to 50% forward and 50% reverse\r\n\0");
-        _delay_ms(2000);
+        encoder_reset();
+        uart_send_string("Starting 90-degree right turn\r\n");
 
-        // Stop the motors
+        motor_set_speed(50, -50);
+
+        uint32_t current_left = 0;
+        uint32_t current_right = 0;
+
+        while (1) {
+            encoder_get_both_ticks(&current_left, &current_right);
+            sprintf(print_buffer, "Left: %lu | Right: %lu\r\n\n", current_left, current_right);
+            uart_send_string(print_buffer);
+
+            if (current_left >= TICKS_FOR_90_DEG) {
+                break; 
+            }
+        }
+
         motor_stop();
-        uart_send_string("Motors stopped\r\n");
-        _delay_ms(1000);
 
-        // Coast the motors
-        motor_coast();
-        uart_send_string("Motors coasting\r\n\0");
-        _delay_ms(1000);
+        sprintf(print_buffer, "Turn Complete! Left: %lu | Right: %lu\r\n\n", current_left, current_right);
+        uart_send_string(print_buffer);
+
+        _delay_ms(3000);
     }
 
     return 0;

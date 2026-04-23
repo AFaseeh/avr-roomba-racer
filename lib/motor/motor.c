@@ -29,34 +29,34 @@ void motor_set_speed(int8_t left_speed, int8_t right_speed) {
         // Forward
         gpio_write_pin(MOTOR_PORT, IN1_LEFT_FWD, GPIO_PIN_HIGH);
         gpio_write_pin(MOTOR_PORT, IN2_LEFT_REV, GPIO_PIN_LOW);
-        timer0_set_pwm_a((left_speed * 255) / 100);
+        timer0_set_pwm_left((left_speed * 255) / 100);
     } else if (left_speed < 0) {
         // Reverse
         gpio_write_pin(MOTOR_PORT, IN1_LEFT_FWD, GPIO_PIN_LOW);
         gpio_write_pin(MOTOR_PORT, IN2_LEFT_REV, GPIO_PIN_HIGH);
-        timer0_set_pwm_a((-left_speed * 255) / 100);
+        timer0_set_pwm_left((-left_speed * 255) / 100);
     } else {
         // Coast
         gpio_write_pin(MOTOR_PORT, IN1_LEFT_FWD, GPIO_PIN_LOW);
         gpio_write_pin(MOTOR_PORT, IN2_LEFT_REV, GPIO_PIN_LOW);
-        timer0_set_pwm_a(0);
+        timer0_set_pwm_left(0);
     }
 
     if (right_speed > 0) {
         // Forward
         gpio_write_pin(MOTOR_PORT, IN3_RIGHT_FWD, GPIO_PIN_HIGH);
         gpio_write_pin(MOTOR_PORT, IN4_RIGHT_REV, GPIO_PIN_LOW);
-        timer0_set_pwm_b((right_speed * 255) / 100);
+        timer0_set_pwm_right((right_speed * 255) / 100);
     } else if (right_speed < 0) {
         // Reverse
         gpio_write_pin(MOTOR_PORT, IN3_RIGHT_FWD, GPIO_PIN_LOW);
         gpio_write_pin(MOTOR_PORT, IN4_RIGHT_REV, GPIO_PIN_HIGH);
-        timer0_set_pwm_b((-right_speed * 255) / 100);
+        timer0_set_pwm_right((-right_speed * 255) / 100);
     } else {
         // Coast
         gpio_write_pin(MOTOR_PORT, IN3_RIGHT_FWD, GPIO_PIN_LOW);
         gpio_write_pin(MOTOR_PORT, IN4_RIGHT_REV, GPIO_PIN_LOW);
-        timer0_set_pwm_b(0);
+        timer0_set_pwm_right(0);
     }
 }
 
@@ -68,8 +68,8 @@ void motor_stop(void) {
     gpio_write_pin(MOTOR_PORT, IN3_RIGHT_FWD, GPIO_PIN_LOW);
     gpio_write_pin(MOTOR_PORT, IN4_RIGHT_REV, GPIO_PIN_LOW);
 
-    timer0_set_pwm_a(255);
-    timer0_set_pwm_b(255);
+    timer0_set_pwm_left(255);
+    timer0_set_pwm_right(255);
 }
 
 void motor_coast(void) {
@@ -80,6 +80,6 @@ void motor_coast(void) {
     gpio_write_pin(MOTOR_PORT, IN4_RIGHT_REV, GPIO_PIN_LOW);
 
     // Drop PWM to 0
-    timer0_set_pwm_a(0);
-    timer0_set_pwm_b(0);
+    timer0_set_pwm_left(0);
+    timer0_set_pwm_right(0);
 }

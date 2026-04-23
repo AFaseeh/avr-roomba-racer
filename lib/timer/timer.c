@@ -24,10 +24,10 @@ void timer0_init_fast_pwm(void)
     OCR0B = 0;
 }
 
-void timer0_set_pwm_a(uint8_t duty) {
+void timer0_set_pwm_left(uint8_t duty) {
     OCR0A = duty;
 }
 
-void timer0_set_pwm_b(uint8_t duty) {
+void timer0_set_pwm_right(uint8_t duty) {
     OCR0B = duty;
 }
