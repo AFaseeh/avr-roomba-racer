@@ -1,4 +1,4 @@
-#include "timer.h"
+#include "timer0.h"
 #include "gpio.h"
 #include "helpers.h"
 #include <avr/io.h>

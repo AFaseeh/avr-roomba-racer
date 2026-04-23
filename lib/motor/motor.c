@@ -1,13 +1,13 @@
 #include "motor.h"
 #include "gpio.h"
-#include "timer.h"
+#include "timer0.h"
 #include "helpers.h"
 
-#define MOTOR_PORT          PORT_B
-#define IN1_LEFT_FWD        0  // PB0
-#define IN2_LEFT_REV        1  // PB1
-#define IN3_RIGHT_FWD       2  // PB2
-#define IN4_RIGHT_REV       3  // PB3
+#define MOTOR_PORT          PORT_C
+#define IN1_LEFT_FWD        0  // PC0
+#define IN2_LEFT_REV        1  // PC1
+#define IN3_RIGHT_FWD       2  // PC2
+#define IN4_RIGHT_REV       3  // PC3
 
 void motor_init(void) {
     // set direction pins as outputs
