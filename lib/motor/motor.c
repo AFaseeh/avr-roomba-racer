@@ -22,8 +22,8 @@ void motor_init(void) {
 }
 
 void motor_set_speed(int8_t left_speed, int8_t right_speed) {
-    left_speed = MAX(-100, MIN(100, left_speed));
-    right_speed = MAX(-100, MIN(100, right_speed));
+    left_speed = CLAMP(left_speed, -100, 100);
+    right_speed = CLAMP(right_speed, -100, 100);
 
     if (left_speed > 0) {
         // Forward

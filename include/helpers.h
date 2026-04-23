@@ -9,5 +9,6 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define ABS(x)    ((x) < 0 ? -(x) : (x))
+#define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
 
 #endif /* HELPERS_H */
