@@ -4,6 +4,7 @@
 #include "uart.h"
 #include "encoder.h"
 #include "ultrasonic.h"
+#include "bluetooth.h"
 
 #define TICKS_FOR_90_DEG 10
 
