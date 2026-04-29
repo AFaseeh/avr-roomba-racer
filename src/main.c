@@ -20,7 +20,7 @@ int main()
     init_system();
 
     char print_buffer[128];
-    triple_ultrasonic_test(print_buffer);
+    ultrasonic_test(print_buffer);
 
     return 0;
 }
@@ -53,7 +53,7 @@ void ultrasonic_test(char* print_buffer) {
         uint16_t distance = ultrasonic_get_distance(US_FRONT);
         sprintf(print_buffer, "Distance: %u cm\r\n", distance);
         uart_send_string(print_buffer);
-        _delay_ms(50);
+        _delay_ms(200);
     }
 }
 

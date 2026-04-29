@@ -12,11 +12,11 @@ typedef enum {
 // Initialize the sensor pins and enable the ICU interrupt
 void ultrasonic_init(void);
 
-// 10us pulse to trigger the sensor (non-blocking, returns immediately)
-// only triggers if the sensor is not currently measuring a distance (if it is idle)
+// Send a 10 us trigger pulse to start a measurement.
+// This only runs when the sensor is idle, it does not wait for the echo.
 void ultrasonic_trigger(UltrasonicID_t id);
 
-// get the latest measured distance in cm (caches results until the next measurement is taken)
+// get the latest measured distance in cm (saves the results until the next measurement is taken)
 uint16_t ultrasonic_get_distance(UltrasonicID_t id);
 
 #endif /* ULTRASONIC_H */

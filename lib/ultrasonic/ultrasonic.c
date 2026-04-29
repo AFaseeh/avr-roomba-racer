@@ -117,25 +117,24 @@ ISR(TIMER1_CAPT_vect) {
     }
 }
 
-// --- The Left & Right Sensors (Pin Change Interrupts) ---
+// Left & Right sensors, use PCNT (Pin Change Interrupt) instead of ICU
 ISR(PCINT1_vect) {
-    // 1. GRAB THE TIME IMMEDIATELY! 
-    // We do this first so the CPU delay doesn't affect our math.
+    // Grab the current time at the start of the ISR for accurate timing
     uint16_t current_time = TCNT1; 
     
-    // 2. Read the actual physical pins using your HAL
+    // Read the actual physical pins
     uint8_t left_pin_state = gpio_read_pin(LEFT_ECHO_PORT, LEFT_ECHO_PIN);
     uint8_t right_pin_state = gpio_read_pin(RIGHT_ECHO_PORT, RIGHT_ECHO_PIN);
 
-    // --- Process Left Sensor ---
+    // Process Left Sensor
     if (us_state[US_LEFT] == US_WAITING_RISING) {
-        if (left_pin_state == GPIO_PIN_HIGH) { // It went high!
+        if (left_pin_state == GPIO_PIN_HIGH) {
             start_time[US_LEFT] = current_time;
             us_state[US_LEFT] = US_WAITING_FALLING;
         }
     } 
     else if (us_state[US_LEFT] == US_WAITING_FALLING) {
-        if (left_pin_state == GPIO_PIN_LOW) { // It went low!
+        if (left_pin_state == GPIO_PIN_LOW) {
             end_time[US_LEFT] = current_time;
             uint32_t time_us = (end_time[US_LEFT] - start_time[US_LEFT]) / 2;
             final_distance[US_LEFT] = time_us / 58;
@@ -143,7 +142,7 @@ ISR(PCINT1_vect) {
         }
     }
 
-    // --- Process Right Sensor ---
+    // Process Right Sensor
     if (us_state[US_RIGHT] == US_WAITING_RISING) {
         if (right_pin_state == GPIO_PIN_HIGH) {
             start_time[US_RIGHT] = current_time;
