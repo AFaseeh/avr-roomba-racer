@@ -30,9 +30,10 @@ typedef enum {
 
 //  shared with the ISR and the main loop
 volatile UltrasonicState_t us_state[3] = {US_IDLE, US_IDLE, US_IDLE};
-volatile uint16_t final_distance[3] = {0, 0, 0};
+volatile uint16_t final_distance[3] = {0xFFFF, 0xFFFF, 0xFFFF};
 volatile uint16_t start_time[3] = {0, 0, 0};
 volatile uint16_t end_time[3] = {0, 0, 0};
+volatile UltrasonicID_t last_sensor = US_RIGHT;
 
 void ultrasonic_init(void) {
     timer1_init_normal_mode();
@@ -59,8 +60,12 @@ void ultrasonic_init(void) {
     SET_BIT(PCMSK1, PCINT11); // PC3 (A3)
 }
 
+void ultrasonic_next(void) {
+    ultrasonic_trigger(GET_NEXT_US(last_sensor));
+}
+
 void ultrasonic_trigger(UltrasonicID_t id) {
-    if (us_state[id] != US_IDLE) {
+    if (us_state[0] != US_IDLE || us_state[1] != US_IDLE || us_state[2] != US_IDLE) {
         return; 
     }
 
@@ -94,6 +99,24 @@ uint16_t ultrasonic_get_distance(UltrasonicID_t id) {
     return final_distance[id];
 }
 
+void ultrasonic_full_sweep(void)
+{
+    ultrasonic_trigger(US_FRONT);
+    while (us_state[US_FRONT] != US_IDLE);
+    ultrasonic_trigger(US_LEFT);
+    while (us_state[US_LEFT] != US_IDLE);
+    ultrasonic_trigger(US_RIGHT);
+    while (us_state[US_RIGHT] != US_IDLE);
+}
+
+uint16_t calculate_distance(uint16_t last, uint16_t current) {
+    uint16_t ticks = current - last;
+    // Prescaler 8 -> 0.5us per tick
+    // divide by 116 to get in cm * 10 to get in mm (or more depending on needed precision)
+    uint32_t mm = (uint32_t)ticks * 10 / 116;     
+    return (uint16_t)mm;
+}
+
 ISR(TIMER1_CAPT_vect) {
     if (us_state[US_FRONT] == US_WAITING_RISING) {
         start_time[US_FRONT] = ICR1;
@@ -106,14 +129,10 @@ ISR(TIMER1_CAPT_vect) {
     } 
     else if (us_state[US_FRONT] == US_WAITING_FALLING) {
         end_time[US_FRONT] = ICR1;
-        
-        uint16_t total_ticks = end_time[US_FRONT] - start_time[US_FRONT];
-        
-        // Prescaler 8 -> 0.5us per tick
-        uint32_t time_us = total_ticks / 2;
-        final_distance[US_FRONT] = time_us / 58;
+        final_distance[US_FRONT] = calculate_distance(start_time[US_FRONT], end_time[US_FRONT]);
 
         us_state[US_FRONT] = US_IDLE;
+        last_sensor = US_FRONT;
     }
 }
 
@@ -136,9 +155,9 @@ ISR(PCINT1_vect) {
     else if (us_state[US_LEFT] == US_WAITING_FALLING) {
         if (left_pin_state == GPIO_PIN_LOW) {
             end_time[US_LEFT] = current_time;
-            uint32_t time_us = (end_time[US_LEFT] - start_time[US_LEFT]) / 2;
-            final_distance[US_LEFT] = time_us / 58;
+            final_distance[US_LEFT] = calculate_distance(start_time[US_LEFT], end_time[US_LEFT]);
             us_state[US_LEFT] = US_IDLE;
+            last_sensor = US_LEFT;
         }
     }
 
@@ -152,9 +171,9 @@ ISR(PCINT1_vect) {
     else if (us_state[US_RIGHT] == US_WAITING_FALLING) {
         if (right_pin_state == GPIO_PIN_LOW) {
             end_time[US_RIGHT] = current_time;
-            uint32_t time_us = (end_time[US_RIGHT] - start_time[US_RIGHT]) / 2;
-            final_distance[US_RIGHT] = time_us / 58;
+            final_distance[US_RIGHT] = calculate_distance(start_time[US_RIGHT], end_time[US_RIGHT]);
             us_state[US_RIGHT] = US_IDLE;
+            last_sensor = US_RIGHT;
         }
     }
 }

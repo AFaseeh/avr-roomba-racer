@@ -11,4 +11,6 @@
 #define ABS(x)    ((x) < 0 ? -(x) : (x))
 #define CLAMP(x, min, max) (MIN(MAX((x), (min)), (max)))
 
+#define GET_NEXT_US(id) ((UltrasonicID_t)(((id) + 1) % 3))
+
 #endif /* HELPERS_H */

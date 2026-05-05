@@ -19,4 +19,10 @@ void ultrasonic_trigger(UltrasonicID_t id);
 // get the latest measured distance in cm (saves the results until the next measurement is taken)
 uint16_t ultrasonic_get_distance(UltrasonicID_t id);
 
+// Trigger the next sensor in the sequence (F -> L -> R -> F -> ...)
+void ultrasonic_next(void);
+
+// Blocks until all 3 sensors have completed a measurement
+// Used in initializing the system
+void ultrasonic_full_sweep(void);
 #endif /* ULTRASONIC_H */
