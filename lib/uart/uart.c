@@ -15,6 +15,7 @@ void uart_init(uint32_t baud_rate) {
     SET_BIT(UCSR0B, TXEN0);
 
     // frame format: 8data, 1stop bit, no parity
+    SET_BIT(UCSR0C, UCSZ01);
     SET_BIT(UCSR0C, UCSZ00);
 }
 
