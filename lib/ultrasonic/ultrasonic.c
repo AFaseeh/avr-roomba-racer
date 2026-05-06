@@ -21,6 +21,10 @@
 #define RIGHT_ECHO_PORT PORT_C
 #define RIGHT_ECHO_PIN  3  // A3 (PCINT11)
 
+// Timer1 runs at 2 MHz (0.5 us/tick), so 60,000 ticks is about 30 ms.
+// This is long enough for normal HC-SR04 echoes and short enough to fit in uint16_t.
+#define ULTRASONIC_TIMEOUT_TICKS 60000U
+
 // The 4 states of our Ultrasonic State Machine
 typedef enum {
     US_IDLE,
@@ -33,7 +37,32 @@ volatile UltrasonicState_t us_state[3] = {US_IDLE, US_IDLE, US_IDLE};
 volatile uint16_t final_distance[3] = {0xFFFF, 0xFFFF, 0xFFFF};
 volatile uint16_t start_time[3] = {0, 0, 0};
 volatile uint16_t end_time[3] = {0, 0, 0};
+volatile uint16_t trigger_time[3] = {0, 0, 0};
 volatile UltrasonicID_t last_sensor = US_RIGHT;
+
+static void ultrasonic_reset_measurement(UltrasonicID_t id)
+{
+    us_state[id] = US_IDLE;
+    start_time[id] = 0;
+    end_time[id] = 0;
+    trigger_time[id] = 0;
+    final_distance[id] = 0xFFFF;
+}
+
+static void ultrasonic_check_timeouts(void)
+{
+    uint16_t current_time = TCNT1;
+    uint8_t sensor_index;
+
+    for (sensor_index = 0; sensor_index < 3U; sensor_index++) {
+        if (us_state[sensor_index] != US_IDLE) {
+            uint16_t elapsed_ticks = (uint16_t)(current_time - trigger_time[sensor_index]);
+            if (elapsed_ticks > ULTRASONIC_TIMEOUT_TICKS) {
+                ultrasonic_reset_measurement((UltrasonicID_t)sensor_index);
+            }
+        }
+    }
+}
 
 void ultrasonic_init(void) {
     timer1_init_normal_mode();
@@ -61,10 +90,13 @@ void ultrasonic_init(void) {
 }
 
 void ultrasonic_next(void) {
+    ultrasonic_check_timeouts();
     ultrasonic_trigger(GET_NEXT_US(last_sensor));
 }
 
 void ultrasonic_trigger(UltrasonicID_t id) {
+    ultrasonic_check_timeouts();
+
     if (us_state[0] != US_IDLE || us_state[1] != US_IDLE || us_state[2] != US_IDLE) {
         return; 
     }
@@ -92,21 +124,29 @@ void ultrasonic_trigger(UltrasonicID_t id) {
         SET_BIT(PCIFR, PCIF1);  // Clear PCINT flag
     }
 
+    trigger_time[id] = TCNT1;
     us_state[id] = US_WAITING_RISING;
 }
 
 uint16_t ultrasonic_get_distance(UltrasonicID_t id) {
+    ultrasonic_check_timeouts();
     return final_distance[id];
 }
 
 void ultrasonic_full_sweep(void)
 {
     ultrasonic_trigger(US_FRONT);
-    while (us_state[US_FRONT] != US_IDLE);
+    while (us_state[US_FRONT] != US_IDLE) {
+        ultrasonic_check_timeouts();
+    }
     ultrasonic_trigger(US_LEFT);
-    while (us_state[US_LEFT] != US_IDLE);
+    while (us_state[US_LEFT] != US_IDLE) {
+        ultrasonic_check_timeouts();
+    }
     ultrasonic_trigger(US_RIGHT);
-    while (us_state[US_RIGHT] != US_IDLE);
+    while (us_state[US_RIGHT] != US_IDLE) {
+        ultrasonic_check_timeouts();
+    }
 }
 
 uint16_t calculate_distance(uint16_t last, uint16_t current) {
