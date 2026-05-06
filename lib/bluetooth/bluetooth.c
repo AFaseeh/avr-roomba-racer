@@ -29,7 +29,6 @@ static uint8_t comm_queue_uint8(uint8_t value)
 void COMM_Init(void)
 {
     turn_count = 0;
-    uart_init(COMM_BAUD_RATE);
 }
 
 uint8_t COMM_LogTurn(char turn_direction)
