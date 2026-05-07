@@ -27,9 +27,10 @@ void timer2_init_millis(void)
 uint32_t get_millis(void)
 {
     uint32_t current_millis;
+    uint8_t sreg_backup = SREG;
     cli();
     current_millis = millis;
-    sei();
+    SREG = sreg_backup;
     return current_millis;
 }
 
