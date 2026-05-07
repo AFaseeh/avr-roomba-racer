@@ -15,8 +15,8 @@ void timer2_init_millis(void)
     
     // Prescaler 64
     CLEAR_BIT(TCCR2B, CS20);
+    CLEAR_BIT(TCCR2B, CS21);
     SET_BIT(TCCR2B, CS22);
-    SET_BIT(TCCR2B, CS21);
      
     OCR2A = 249;
     TCNT2 = 0;
