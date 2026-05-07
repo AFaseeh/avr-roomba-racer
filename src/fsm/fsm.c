@@ -25,6 +25,8 @@
 #define ALIGN_STABLE_CYCLES 3
 #define LOST_WALL_TIMEOUT_MS 1000UL
 #define LOST_WALL_RECOVER_DIST 250
+#define FINISH_OPEN_SIDE_DIST 300
+#define FINISH_OPEN_FRONT_DIST 400
 #define DECISION_SAMPLE_COUNT 3U
 #define DECISION_SAMPLE_DELAY_MS 20U
 #define TICKS_FOR_90_DEG 10
@@ -194,7 +196,16 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             }
             break;
         case STATE_LOST_WALL:
-            sprintf(printf_buffer, "State: LOST_WALL | L: %3u mm | elapsed: %lu\r\n", dist_L, (unsigned long)(get_millis() - lost_wall_start_ms));
+        {
+            uint8_t left_open = ((dist_L == INVALID_DISTANCE_MM) || (dist_L > FINISH_OPEN_SIDE_DIST)) ? 1U : 0U;
+            uint8_t right_open = ((dist_R == INVALID_DISTANCE_MM) || (dist_R > FINISH_OPEN_SIDE_DIST)) ? 1U : 0U;
+            uint8_t front_open = ((dist_F == INVALID_DISTANCE_MM) || (dist_F > FINISH_OPEN_FRONT_DIST)) ? 1U : 0U;
+
+            sprintf(printf_buffer, "State: LOST_WALL | F: %3u mm | L: %3u mm | R: %3u mm | elapsed: %lu\r\n",
+                    dist_F,
+                    dist_L,
+                    dist_R,
+                    (unsigned long)(get_millis() - lost_wall_start_ms));
 
             if ((dist_L != INVALID_DISTANCE_MM) && (dist_L <= LOST_WALL_RECOVER_DIST)) {
                 pd_init(&wall_pd, KP, KD);
@@ -202,7 +213,8 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 break;
             }
 
-            if ((get_millis() - lost_wall_start_ms) >= LOST_WALL_TIMEOUT_MS) {
+            if (left_open && right_open && front_open &&
+                ((get_millis() - lost_wall_start_ms) >= LOST_WALL_TIMEOUT_MS)) {
                 motor_stop();
                 finish_data_sent = 0;
                 current_state = STATE_FINISH;
@@ -211,6 +223,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
 
             motor_set_speed(LOST_WALL_SPEED, LOST_WALL_SPEED);
             break;
+        }
         case STATE_FINISH:
             motor_stop();
             if (finish_data_sent == 0U) {
