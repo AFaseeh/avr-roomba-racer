@@ -6,6 +6,7 @@
 #include "bluetooth.h"
 #include "timer2.h"
 #include <stdio.h>
+#include <util/delay.h>
 
 // Wall following
 #define KP 1.0f
@@ -24,12 +25,54 @@
 #define ALIGN_STABLE_CYCLES 3
 #define LOST_WALL_TIMEOUT_MS 1000UL
 #define LOST_WALL_RECOVER_DIST 250
+#define DECISION_SAMPLE_COUNT 3U
+#define DECISION_SAMPLE_DELAY_MS 20U
 #define TICKS_FOR_90_DEG 10
 #define INVALID_DISTANCE_MM 0xFFFFU
 
 volatile RobotState_t current_state = STATE_WALL_FOLLOW;
 PD_Controller_t wall_pd;
 PD_Controller_t align_pd;
+
+static uint16_t fsm_average_valid_samples(const uint16_t *samples, uint8_t count)
+{
+    uint32_t sum = 0;
+    uint8_t valid_count = 0;
+    uint8_t i;
+
+    for (i = 0; i < count; i++) {
+        if (samples[i] != INVALID_DISTANCE_MM) {
+            sum += samples[i];
+            valid_count++;
+        }
+    }
+
+    if (valid_count == 0U) {
+        return INVALID_DISTANCE_MM;
+    }
+
+    return (uint16_t)(sum / valid_count);
+}
+
+static void fsm_get_decision_distances(uint16_t *left_avg, uint16_t *right_avg)
+{
+    uint16_t left_samples[DECISION_SAMPLE_COUNT];
+    uint16_t right_samples[DECISION_SAMPLE_COUNT];
+    uint8_t i;
+
+    for (i = 0; i < DECISION_SAMPLE_COUNT; i++) {
+        ultrasonic_trigger(US_LEFT);
+        _delay_ms(DECISION_SAMPLE_DELAY_MS);
+        left_samples[i] = ultrasonic_get_distance(US_LEFT);
+
+        ultrasonic_trigger(US_RIGHT);
+        _delay_ms(DECISION_SAMPLE_DELAY_MS);
+        right_samples[i] = ultrasonic_get_distance(US_RIGHT);
+    }
+
+    *left_avg = fsm_average_valid_samples(left_samples, DECISION_SAMPLE_COUNT);
+    *right_avg = fsm_average_valid_samples(right_samples, DECISION_SAMPLE_COUNT);
+}
 
 void fsm_init(void)
 {
@@ -69,10 +112,28 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             // takes around ~150 ms BLOCKING (before decision we get the newest distances)
             // TODO: full sweep only on left and right and do it like 3 times and take the average to reduce noise effect
             // and then decide based on the average distances
-            sprintf(printf_buffer, "State: DECISION | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
-            // ultrasonic_full_sweep();    
+        {
+            uint16_t decision_left;
+            uint16_t decision_right;
+
+            fsm_get_decision_distances(&decision_left, &decision_right);
+            sprintf(printf_buffer, "State: DECISION | F: %3u mm | Lavg: %3u mm | Ravg: %3u mm\r\n", dist_F, decision_left, decision_right);
             encoder_reset();
-            if (dist_L > dist_R) {
+
+            if ((decision_left == INVALID_DISTANCE_MM) && (decision_right == INVALID_DISTANCE_MM)) {
+                current_state = STATE_LOST_WALL;
+                lost_wall_start_ms = get_millis();
+                break;
+            }
+
+            if (decision_right == INVALID_DISTANCE_MM) {
+                COMM_LogTurn('L');
+                current_state = STATE_TURN_LEFT;
+                turn_direction = -1;
+                break;
+            }
+
+            if ((decision_left != INVALID_DISTANCE_MM) && (decision_left > decision_right)) {
                 // More space on the left
                 COMM_LogTurn('L');
                 current_state = STATE_TURN_LEFT;
@@ -84,6 +145,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 turn_direction = 1;
             }
             break;
+        }
         case STATE_TURN_LEFT:
         case STATE_TURN_RIGHT:
             encoder_get_both_ticks(&enc_left, &enc_right);
