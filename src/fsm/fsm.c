@@ -9,20 +9,28 @@
 // Wall following
 #define KP 1.0f
 #define KD 0.5f
+#define ALIGN_KP 0.8f
+#define ALIGN_KD 0.3f
 #define CRITICAL_FRONT_DIST 150
 #define SLOWDOWN_FRONT_DIST 350
 #define TARGET_WALL_DIST 140
 #define WALL_FOLLOW_SPEED 100
 #define TURN_SPEED 80
 #define ALIGN_SPEED 60
+#define ALIGN_FRONT_CLEAR_DIST 250
+#define ALIGN_TOLERANCE_MM 20
+#define ALIGN_STABLE_CYCLES 3
 #define TICKS_FOR_90_DEG 10
+#define INVALID_DISTANCE_MM 0xFFFFU
 
 volatile RobotState_t current_state = STATE_WALL_FOLLOW;
 PD_Controller_t wall_pd;
+PD_Controller_t align_pd;
 
 void fsm_init(void)
 {
     pd_init(&wall_pd, KP, KD);
+    pd_init(&align_pd, ALIGN_KP, ALIGN_KD);
 }
 
 void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_buffer)
@@ -31,6 +39,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
     float error;
     int16_t correction, left_speed, right_speed;
     static int16_t turn_direction = 1; // -1 for left, 1 for right
+    static uint8_t align_stable_cycles = 0;
     switch (current_state) {
         case STATE_WALL_FOLLOW:
             sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
@@ -70,14 +79,46 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
             if (((enc_left + enc_right) / 2) >= TICKS_FOR_90_DEG) {
                 motor_stop();
+                pd_init(&align_pd, ALIGN_KP, ALIGN_KD);
+                align_stable_cycles = 0;
                 current_state = STATE_ALIGN;
             } else {
                 motor_set_speed(turn_direction * TURN_SPEED, -turn_direction * TURN_SPEED);
             }
             break;
         case STATE_ALIGN:
-            sprintf(printf_buffer, "State: ALIGN | F: %3u mm\r\n", dist_F);
-            current_state = STATE_WALL_FOLLOW;
+            sprintf(printf_buffer, "State: ALIGN | F: %3u mm | L: %3u mm | stable: %u\r\n", dist_F, dist_L, align_stable_cycles);
+
+            if ((dist_L == INVALID_DISTANCE_MM) || (dist_F == INVALID_DISTANCE_MM)) {
+                align_stable_cycles = 0;
+                motor_stop();
+                break;
+            }
+
+            error = (float)dist_L - TARGET_WALL_DIST;
+            correction = pd_compute(&align_pd, error);
+            left_speed = ALIGN_SPEED + correction;
+            right_speed = ALIGN_SPEED - correction;
+
+            if (dist_F < ALIGN_FRONT_CLEAR_DIST) {
+                motor_set_speed(-turn_direction * ALIGN_SPEED, turn_direction * ALIGN_SPEED);
+                align_stable_cycles = 0;
+                break;
+            }
+
+            motor_set_speed(left_speed, right_speed);
+
+            if ((error <= ALIGN_TOLERANCE_MM) && (error >= -ALIGN_TOLERANCE_MM)) {
+                align_stable_cycles++;
+            } else {
+                align_stable_cycles = 0;
+            }
+
+            if (align_stable_cycles >= ALIGN_STABLE_CYCLES) {
+                motor_stop();
+                pd_init(&wall_pd, KP, KD);
+                current_state = STATE_WALL_FOLLOW;
+            }
             break;
         case STATE_LOST_WALL:
             // TODO: after 1 sec of lost wall go to STATE_FINISH
