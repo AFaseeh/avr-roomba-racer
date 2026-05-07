@@ -9,10 +9,14 @@ volatile uint32_t millis = 0;
 void timer2_init_millis(void)
 {
     // CTC mode
-    SET_BIT(TCCR2B, WGM21);
+    CLEAR_BIT(TCCR2A, WGM20);
+    SET_BIT(TCCR2A, WGM21);
+    CLEAR_BIT(TCCR2B, WGM22);
     
     // Prescaler 64
+    CLEAR_BIT(TCCR2B, CS20);
     SET_BIT(TCCR2B, CS22);
+    SET_BIT(TCCR2B, CS21);
      
     OCR2A = 249;
     TCNT2 = 0;
