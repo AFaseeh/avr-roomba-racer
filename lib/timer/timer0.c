@@ -9,14 +9,24 @@ void timer0_init_fast_pwm(void)
     gpio_set_pin_direction(PORT_D, 5, GPIO_DIR_OUTPUT); // PD5 as output (OC0B)
 
     // fast pwm (WGM01, WGM00)
+    CLEAR_BIT(TCCR0A, WGM00);
+    CLEAR_BIT(TCCR0A, WGM01);
+    CLEAR_BIT(TCCR0B, WGM02);
     SET_BIT(TCCR0A, WGM01);
     SET_BIT(TCCR0A, WGM00);
 
     // both non inverting(COM0A1, COM0B1)
+    CLEAR_BIT(TCCR0A, COM0A0);
+    CLEAR_BIT(TCCR0A, COM0B0);
+    CLEAR_BIT(TCCR0A, COM0A1);
+    CLEAR_BIT(TCCR0A, COM0B1);
     SET_BIT(TCCR0A, COM0A1);
     SET_BIT(TCCR0A, COM0B1);
 
     // prescaler = 64
+    CLEAR_BIT(TCCR0B, CS00);
+    CLEAR_BIT(TCCR0B, CS01);
+    CLEAR_BIT(TCCR0B, CS02);
     SET_BIT(TCCR0B, CS01);
     SET_BIT(TCCR0B, CS00);
 
