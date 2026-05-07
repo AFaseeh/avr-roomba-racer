@@ -4,6 +4,7 @@
 #include "encoder.h"
 #include "pid/pid.h"
 #include "bluetooth.h"
+#include "timer2.h"
 #include <stdio.h>
 
 // Wall following
@@ -15,11 +16,14 @@
 #define SLOWDOWN_FRONT_DIST 350
 #define TARGET_WALL_DIST 140
 #define WALL_FOLLOW_SPEED 100
+#define LOST_WALL_SPEED 45
 #define TURN_SPEED 80
 #define ALIGN_SPEED 60
 #define ALIGN_FRONT_CLEAR_DIST 250
 #define ALIGN_TOLERANCE_MM 20
 #define ALIGN_STABLE_CYCLES 3
+#define LOST_WALL_TIMEOUT_MS 1000UL
+#define LOST_WALL_RECOVER_DIST 250
 #define TICKS_FOR_90_DEG 10
 #define INVALID_DISTANCE_MM 0xFFFFU
 
@@ -40,6 +44,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
     int16_t correction, left_speed, right_speed;
     static int16_t turn_direction = 1; // -1 for left, 1 for right
     static uint8_t align_stable_cycles = 0;
+    static uint32_t lost_wall_start_ms = 0;
     switch (current_state) {
         case STATE_WALL_FOLLOW:
             sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
@@ -47,7 +52,12 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 motor_stop();
                 current_state = STATE_DECISION;
                 break;
-            } 
+            }
+            if ((dist_L == INVALID_DISTANCE_MM) || (dist_L > LOST_WALL_RECOVER_DIST)) {
+                lost_wall_start_ms = get_millis();
+                current_state = STATE_LOST_WALL;
+                break;
+            }
             error = (float)dist_L - TARGET_WALL_DIST;
             correction = pd_compute(&wall_pd, error);
             left_speed = WALL_FOLLOW_SPEED + correction;
@@ -121,7 +131,21 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             }
             break;
         case STATE_LOST_WALL:
-            // TODO: after 1 sec of lost wall go to STATE_FINISH
+            sprintf(printf_buffer, "State: LOST_WALL | L: %3u mm | elapsed: %lu\r\n", dist_L, (unsigned long)(get_millis() - lost_wall_start_ms));
+
+            if ((dist_L != INVALID_DISTANCE_MM) && (dist_L <= LOST_WALL_RECOVER_DIST)) {
+                pd_init(&wall_pd, KP, KD);
+                current_state = STATE_WALL_FOLLOW;
+                break;
+            }
+
+            if ((get_millis() - lost_wall_start_ms) >= LOST_WALL_TIMEOUT_MS) {
+                motor_stop();
+                current_state = STATE_FINISH;
+                break;
+            }
+
+            motor_set_speed(LOST_WALL_SPEED, LOST_WALL_SPEED);
             break;
         case STATE_FINISH:
             motor_stop();
