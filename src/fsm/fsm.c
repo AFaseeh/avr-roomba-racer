@@ -44,6 +44,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
     int16_t correction, left_speed, right_speed;
     static int16_t turn_direction = 1; // -1 for left, 1 for right
     static uint8_t align_stable_cycles = 0;
+    static uint8_t finish_data_sent = 0;
     static uint32_t lost_wall_start_ms = 0;
     switch (current_state) {
         case STATE_WALL_FOLLOW:
@@ -141,6 +142,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
 
             if ((get_millis() - lost_wall_start_ms) >= LOST_WALL_TIMEOUT_MS) {
                 motor_stop();
+                finish_data_sent = 0;
                 current_state = STATE_FINISH;
                 break;
             }
@@ -149,7 +151,10 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             break;
         case STATE_FINISH:
             motor_stop();
-            COMM_TransmitFinalData();
+            if (finish_data_sent == 0U) {
+                COMM_TransmitFinalData();
+                finish_data_sent = 1U;
+            }
             break;
     }
 }
