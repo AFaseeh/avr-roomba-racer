@@ -28,6 +28,13 @@ typedef enum {
     US_WAITING_FALLING
 } UltrasonicState_t;
 
+typedef struct {
+    uint16_t readings[5]; // Circular buffer of the last 5 readings
+    uint8_t index;        // Current index in the circular buffer
+} UltrasonicFilter_t;
+
+volatile UltrasonicFilter_t filters[3] = {{.index = 0}, {.index = 0}, {.index = 0}}; // One filter for each sensor
+
 //  shared with the ISR and the main loop
 volatile UltrasonicState_t us_state[3] = {US_IDLE, US_IDLE, US_IDLE};
 volatile uint16_t final_distance[3] = {0xFFFF, 0xFFFF, 0xFFFF};
@@ -96,7 +103,7 @@ void ultrasonic_trigger(UltrasonicID_t id) {
 }
 
 uint16_t ultrasonic_get_distance(UltrasonicID_t id) {
-    return final_distance[id];
+    return ultrasonic_filter_reading(id);
 }
 
 void ultrasonic_full_sweep(void)
@@ -107,6 +114,21 @@ void ultrasonic_full_sweep(void)
     while (us_state[US_LEFT] != US_IDLE);
     ultrasonic_trigger(US_RIGHT);
     while (us_state[US_RIGHT] != US_IDLE);
+}
+
+uint16_t ultrasonic_filter_reading(UltrasonicID_t id)
+{
+    // Simple average of the last 5 readings
+    uint16_t max = 0;
+    uint16_t min = 0xFFFF;
+    uint32_t sum = 0;
+    for (int i = 0; i < 5; i++) {
+        sum += filters[id].readings[i];
+        max = MAX(max, filters[id].readings[i]);
+        min = MIN(min, filters[id].readings[i]);
+    }
+    sum -= max + min; // Remove outliers
+    return (uint16_t)(sum / 3);
 }
 
 uint16_t calculate_distance(uint16_t last, uint16_t current) {
@@ -133,6 +155,8 @@ ISR(TIMER1_CAPT_vect) {
 
         us_state[US_FRONT] = US_IDLE;
         last_sensor = US_FRONT;
+        filters[US_FRONT].readings[filters[US_FRONT].index] = final_distance[US_FRONT];
+        filters[US_FRONT].index = (filters[US_FRONT].index + 1) % 5;
     }
 }
 
@@ -158,6 +182,8 @@ ISR(PCINT1_vect) {
             final_distance[US_LEFT] = calculate_distance(start_time[US_LEFT], end_time[US_LEFT]);
             us_state[US_LEFT] = US_IDLE;
             last_sensor = US_LEFT;
+            filters[US_LEFT].readings[filters[US_LEFT].index] = final_distance[US_LEFT];
+            filters[US_LEFT].index = (filters[US_LEFT].index + 1) % 5;
         }
     }
 
@@ -174,6 +200,8 @@ ISR(PCINT1_vect) {
             final_distance[US_RIGHT] = calculate_distance(start_time[US_RIGHT], end_time[US_RIGHT]);
             us_state[US_RIGHT] = US_IDLE;
             last_sensor = US_RIGHT;
+            filters[US_RIGHT].readings[filters[US_RIGHT].index] = final_distance[US_RIGHT];
+            filters[US_RIGHT].index = (filters[US_RIGHT].index + 1) % 5;
         }
     }
 }

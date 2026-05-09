@@ -25,4 +25,6 @@ void ultrasonic_next(void);
 // Blocks until all 3 sensors have completed a measurement
 // Used in initializing the system
 void ultrasonic_full_sweep(void);
+
+uint16_t ultrasonic_filter_reading(UltrasonicID_t id);
 #endif /* ULTRASONIC_H */

@@ -4,6 +4,7 @@
 #include "encoder.h"
 #include "pid/pid.h"
 #include "bluetooth.h"
+#include "uart.h"
 #include <stdio.h>
 
 // Wall following
@@ -15,7 +16,7 @@
 #define WALL_FOLLOW_SPEED 100
 #define TURN_SPEED 80
 #define ALIGN_SPEED 60
-#define TICKS_FOR_90_DEG 10
+#define TICKS_FOR_90_DEG 90
 
 volatile RobotState_t current_state = STATE_WALL_FOLLOW;
 PD_Controller_t wall_pd;
@@ -33,7 +34,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
     static int16_t turn_direction = 1; // -1 for left, 1 for right
     switch (current_state) {
         case STATE_WALL_FOLLOW:
-            sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
+            //sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
             if (dist_F < CRITICAL_FRONT_DIST) {
                 motor_stop();
                 current_state = STATE_DECISION;
@@ -41,8 +42,10 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             } 
             error = (float)dist_L - TARGET_WALL_DIST;
             correction = pd_compute(&wall_pd, error);
-            left_speed = WALL_FOLLOW_SPEED + correction;
-            right_speed = WALL_FOLLOW_SPEED - correction;
+            left_speed = WALL_FOLLOW_SPEED;// + correction;
+            right_speed = WALL_FOLLOW_SPEED;// - correction;
+            sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm | Error: %d | Correction: %d\r\n", dist_F, dist_L, dist_R, (int)error, correction);
+            uart_send_string(printf_buffer);
             motor_set_speed(left_speed, right_speed);
             break;
         case STATE_DECISION:

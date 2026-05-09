@@ -24,7 +24,9 @@ void init_system() {
 
 void main_loop(char* print_buffer)
 {
-    ultrasonic_full_sweep(); // initial readings
+    for (int i = 0; i < 5; i++) {
+        ultrasonic_full_sweep();
+    }
     uint32_t last_ping_time = 0;
     while(1)
     {
