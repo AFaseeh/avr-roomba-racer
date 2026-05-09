@@ -9,9 +9,13 @@ volatile uint32_t millis = 0;
 void timer2_init_millis(void)
 {
     // CTC mode
-    SET_BIT(TCCR2B, WGM22);
+    CLEAR_BIT(TCCR2A, WGM20);
+    SET_BIT(TCCR2A, WGM21);
+    CLEAR_BIT(TCCR2B, WGM22);
     
     // Prescaler 64
+    CLEAR_BIT(TCCR2B, CS20);
+    CLEAR_BIT(TCCR2B, CS21);
     SET_BIT(TCCR2B, CS22);
      
     OCR2A = 249;
@@ -23,9 +27,10 @@ void timer2_init_millis(void)
 uint32_t get_millis(void)
 {
     uint32_t current_millis;
+    uint8_t sreg_backup = SREG;
     cli();
     current_millis = millis;
-    sei();
+    SREG = sreg_backup;
     return current_millis;
 }
 

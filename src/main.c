@@ -62,15 +62,18 @@ int main()
 
 
 void triple_ultrasonic_test(char* print_buffer) {
+    for (int i = 0; i < 5; i++) {
+        ultrasonic_full_sweep();
+    }
+    uint32_t last_ping_time = 0;
+
     while (1) {
-        ultrasonic_trigger(US_FRONT);
-        _delay_ms(40);
-
-        ultrasonic_trigger(US_LEFT);
-        _delay_ms(40);
-
-        ultrasonic_trigger(US_RIGHT);
-        _delay_ms(40);
+        ultrasonic_next();
+        uint32_t current_time = get_millis();
+        if (current_time - last_ping_time >= PING_INTERVAL_MS) {
+            ultrasonic_next();
+            last_ping_time = current_time;
+        }
 
         uint16_t front_distance = ultrasonic_get_distance(US_FRONT);
         uint16_t left_distance = ultrasonic_get_distance(US_LEFT);
@@ -83,10 +86,10 @@ void triple_ultrasonic_test(char* print_buffer) {
     }
 }
 
-void ultrasonic_test(char* print_buffer) {
+void ultrasonic_test(char* print_buffer, UltrasonicID_t id) {
     while (1) {
-        ultrasonic_trigger(US_FRONT);
-        uint16_t distance = ultrasonic_get_distance(US_FRONT);
+        ultrasonic_trigger(id);
+        uint16_t distance = ultrasonic_get_distance(id);
         sprintf(print_buffer, "Distance: %u mm\r\n", distance);
         uart_send_string(print_buffer);
         _delay_ms(200);
