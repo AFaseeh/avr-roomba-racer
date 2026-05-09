@@ -187,11 +187,10 @@ ISR(TIMER1_CAPT_vect) {
     } 
     else if (us_state[US_FRONT] == US_WAITING_FALLING) {
         end_time[US_FRONT] = ICR1;
-        final_distance[US_FRONT] = calculate_distance(start_time[US_FRONT], end_time[US_FRONT]);
 
         us_state[US_FRONT] = US_IDLE;
         last_sensor = US_FRONT;
-        filters[US_FRONT].readings[filters[US_FRONT].index] = final_distance[US_FRONT];
+        filters[US_FRONT].readings[filters[US_FRONT].index] = calculate_distance(start_time[US_FRONT], end_time[US_FRONT]);
         filters[US_FRONT].index = (filters[US_FRONT].index + 1) % 5;
     }
 }
@@ -215,10 +214,9 @@ ISR(PCINT1_vect) {
     else if (us_state[US_LEFT] == US_WAITING_FALLING) {
         if (left_pin_state == GPIO_PIN_LOW) {
             end_time[US_LEFT] = current_time;
-            final_distance[US_LEFT] = calculate_distance(start_time[US_LEFT], end_time[US_LEFT]);
             us_state[US_LEFT] = US_IDLE;
             last_sensor = US_LEFT;
-            filters[US_LEFT].readings[filters[US_LEFT].index] = final_distance[US_LEFT];
+            filters[US_LEFT].readings[filters[US_LEFT].index] = calculate_distance(start_time[US_LEFT], end_time[US_LEFT]);;
             filters[US_LEFT].index = (filters[US_LEFT].index + 1) % 5;
         }
     }
@@ -233,10 +231,9 @@ ISR(PCINT1_vect) {
     else if (us_state[US_RIGHT] == US_WAITING_FALLING) {
         if (right_pin_state == GPIO_PIN_LOW) {
             end_time[US_RIGHT] = current_time;
-            final_distance[US_RIGHT] = calculate_distance(start_time[US_RIGHT], end_time[US_RIGHT]);
             us_state[US_RIGHT] = US_IDLE;
             last_sensor = US_RIGHT;
-            filters[US_RIGHT].readings[filters[US_RIGHT].index] = final_distance[US_RIGHT];
+            filters[US_RIGHT].readings[filters[US_RIGHT].index] = calculate_distance(start_time[US_RIGHT], end_time[US_RIGHT]);
             filters[US_RIGHT].index = (filters[US_RIGHT].index + 1) % 5;
         }
     }
