@@ -7,37 +7,56 @@
 #include "timer2.h"
 #include "uart.h"
 #include <stdio.h>
+#include "helpers.h"
 
 // Wall following
-#define KP 1.0f
-#define KD 0.5f
+//#define KP 0.1f
+#define KD 0.2f
+#define MAX_CORRECTION 20
+#define TARGET_WALL_DIST    150
+#define MIN_WALL_DIST       100
+
+
+//#define BREAK_KP 0.33       // KP = Speed / Breaking dist (error), at 350 mm we want it to be 100% then (350 - 150 (which is the Critical Dist)) = 
+#define BREAK_KD 0.05f
+
 #define ALIGN_KP 0.8f
 #define ALIGN_KD 0.3f
-#define CRITICAL_FRONT_DIST 150
+#define CRITICAL_FRONT_DIST 150     // Front
 #define SLOWDOWN_FRONT_DIST 350
-#define TARGET_WALL_DIST 140
 #define WALL_FOLLOW_SPEED 100
-#define LOST_WALL_SPEED 45
+#define LOST_WALL_SPEED 70
 #define TURN_SPEED 80
 #define ALIGN_SPEED 60
-#define TICKS_FOR_90_DEG 90
+#define TICKS_FOR_90_DEG 280
 
 #define ALIGN_FRONT_CLEAR_DIST 250
 #define ALIGN_TOLERANCE_MM 20
-#define ALIGN_STABLE_CYCLES 3
-#define LOST_WALL_TIMEOUT_MS 1000UL
+#define LOST_WALL_TIMEOUT_MS 2500UL // 2.5 secs
 #define LOST_WALL_RECOVER_DIST 250
 #define FINISH_OPEN_SIDE_DIST 400
 #define FINISH_OPEN_FRONT_DIST 400
 #define INVALID_DISTANCE_MM 0xFFFFU
 
+#define MIN_MOTOR_SPEED 30
+#define DECISION_TIME_MS 250
+
 volatile RobotState_t current_state = STATE_WALL_FOLLOW;
 PD_Controller_t wall_pd;
 PD_Controller_t align_pd;
+PD_Controller_t brake_pd;
 
 void fsm_init(void)
 {
-    pd_init(&wall_pd, KP, KD);
+    float steer_zone = (float)(TARGET_WALL_DIST - MIN_WALL_DIST);
+    float dynamic_steer_kp = (float)MAX_CORRECTION / steer_zone;
+    pd_init(&wall_pd, dynamic_steer_kp, KD);
+
+    float brake_zone_width = (float)(SLOWDOWN_FRONT_DIST - CRITICAL_FRONT_DIST);
+    float speed_to_drop = (float)(WALL_FOLLOW_SPEED - MIN_MOTOR_SPEED);
+    float dynamic_brake_kp = speed_to_drop / brake_zone_width;
+    pd_init(&brake_pd, dynamic_brake_kp, BREAK_KD);
+    
     pd_init(&align_pd, ALIGN_KP, ALIGN_KD);
 }
 
@@ -47,18 +66,19 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
     float error;
     int16_t correction, left_speed, right_speed;
     static int16_t turn_direction = 1; // -1 for left, 1 for right
-    static uint8_t align_stable_cycles = 0;
     static uint8_t finish_data_sent = 0;
     static uint32_t lost_wall_start_ms = 0;
     static uint16_t decision_front_reference = INVALID_DISTANCE_MM;
-    sprintf(printf_buffer, "State: %d | F: %3u mm | L: %3u mm | R: %3u mm\r\n", current_state, dist_F, dist_L, dist_R);
-    uart_send_string(printf_buffer);
+    static uint32_t decision_start_ms = 0;
+
+    //sprintf(printf_buffer, "State: %d | F: %3u mm | L: %3u mm | R: %3u mm\r\n", current_state, dist_F, dist_L, dist_R);
+    //uart_send_string(printf_buffer);
     switch (current_state) {
         case STATE_WALL_FOLLOW:
-            //sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
             if (dist_F < CRITICAL_FRONT_DIST) {
                 motor_stop();
                 current_state = STATE_DECISION;
+                decision_start_ms = get_millis();
                 break;
             }
             if ((dist_L == INVALID_DISTANCE_MM) || (dist_L > LOST_WALL_RECOVER_DIST)) {
@@ -68,38 +88,59 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             }
             error = (float)dist_L - TARGET_WALL_DIST;
             correction = pd_compute(&wall_pd, error);
-            left_speed = WALL_FOLLOW_SPEED;// + correction;
-            right_speed = WALL_FOLLOW_SPEED;// - correction;
-            sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm | Error: %d | Correction: %d\r\n", dist_F, dist_L, dist_R, (int)error, correction);
-            uart_send_string(printf_buffer);
+            correction = CLAMP(correction, -MAX_CORRECTION, MAX_CORRECTION);
+            
+            int16_t base_speed = WALL_FOLLOW_SPEED;
+            
+            if (dist_F < SLOWDOWN_FRONT_DIST) {
+                float brake_error = (float)dist_F - CRITICAL_FRONT_DIST;
+                int16_t pd = pd_compute(&brake_pd, brake_error);
+                
+                base_speed = CLAMP(pd + MIN_MOTOR_SPEED, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
+            }
+            
+            left_speed = base_speed;// + correction;
+            right_speed = base_speed;// - correction;
+
+            left_speed = CLAMP(left_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
+            right_speed = CLAMP(right_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
+            sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm, speeds L: %d R: %d\r\n", dist_F, dist_L, dist_R, left_speed, right_speed);
+            // sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm | Error: %d | Correction: %d\r\n", dist_F, dist_L, dist_R, (int)error, correction);
             motor_set_speed(left_speed, right_speed);
             break;
         case STATE_DECISION:
         {
+            if ((get_millis() - decision_start_ms) < DECISION_TIME_MS){
+                break;
+            }
+            
             decision_front_reference = dist_F;
-            sprintf(printf_buffer, "State: DECISION | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
             encoder_reset();
-
             if ((dist_L == INVALID_DISTANCE_MM) && (dist_R == INVALID_DISTANCE_MM)) {
                 current_state = STATE_LOST_WALL;
                 lost_wall_start_ms = get_millis();
                 break;
             }
 
-            if (dist_R == INVALID_DISTANCE_MM) {
+            // Left open -> turn left
+            if (dist_L == INVALID_DISTANCE_MM) {
                 COMM_LogTurn('L');
                 current_state = STATE_TURN_LEFT;
                 turn_direction = -1;
-                break;
             }
-
-            if ((dist_L != INVALID_DISTANCE_MM) && (dist_L > dist_R)) {
-                // More space on the left
+            // Right open -> turn right
+            else if (dist_R == INVALID_DISTANCE_MM) {
+                COMM_LogTurn('R');
+                current_state = STATE_TURN_RIGHT;
+                turn_direction = 1;
+            }
+            // turn towards more open side
+            else if (dist_L > dist_R) {
                 COMM_LogTurn('L');
                 current_state = STATE_TURN_LEFT;
                 turn_direction = -1;
-            } else {
-                // More space on the right
+            } 
+            else {
                 COMM_LogTurn('R');
                 current_state = STATE_TURN_RIGHT;
                 turn_direction = 1;
@@ -108,11 +149,12 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
         }
         case STATE_TURN_LEFT:
         case STATE_TURN_RIGHT:
+            current_state = STATE_WALL_FOLLOW;
+            break;
             encoder_get_both_ticks(&enc_left, &enc_right);
             sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
             if (((enc_left + enc_right) / 2) >= TICKS_FOR_90_DEG) {
                 motor_stop();
-                align_stable_cycles = 0;
                 current_state = STATE_ALIGN;
             } else {
                 motor_set_speed(turn_direction * TURN_SPEED, -turn_direction * TURN_SPEED);
@@ -120,19 +162,20 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             break;
         case STATE_ALIGN:
         {
+            current_state = STATE_WALL_FOLLOW;
+            break;
+
             uint16_t align_distance = (turn_direction < 0) ? dist_R : dist_L;
-            int16_t rotation_direction = 0; //
+            int16_t rotation_direction = 0;
 
             sprintf(printf_buffer,
-                    "State: ALIGN | RefF: %3u mm | Align: %3u mm | stable: %u\r\n",
+                    "State: ALIGN | RefF: %3u mm | Align: %3u mm\r\n",
                     decision_front_reference,
-                    align_distance,
-                    align_stable_cycles);
+                    align_distance);
 
             if ((decision_front_reference == INVALID_DISTANCE_MM) ||
                 (align_distance == INVALID_DISTANCE_MM)) {
                 current_state = STATE_FINISH;
-                align_stable_cycles = 0;
                 motor_stop();
                 break;
             }
@@ -163,9 +206,6 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
         }
         case STATE_LOST_WALL:
         {
-            current_state = STATE_WALL_FOLLOW;
-            break;
-
             uint8_t left_open = ((dist_L == INVALID_DISTANCE_MM) || (dist_L > FINISH_OPEN_SIDE_DIST)) ? 1U : 0U;
             uint8_t right_open = ((dist_R == INVALID_DISTANCE_MM) || (dist_R > FINISH_OPEN_SIDE_DIST)) ? 1U : 0U;
             uint8_t front_open = ((dist_F == INVALID_DISTANCE_MM) || (dist_F > FINISH_OPEN_FRONT_DIST)) ? 1U : 0U;
@@ -175,6 +215,13 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                     dist_L,
                     dist_R,
                     (unsigned long)(get_millis() - lost_wall_start_ms));
+
+            if (dist_F < CRITICAL_FRONT_DIST) {
+                motor_stop();
+                current_state = STATE_DECISION;
+                decision_start_ms = get_millis();
+                break;
+            }
 
             if ((dist_L != INVALID_DISTANCE_MM) && (dist_L <= LOST_WALL_RECOVER_DIST)) {
                 current_state = STATE_WALL_FOLLOW;
@@ -197,6 +244,10 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             if (finish_data_sent == 0U) {
                 COMM_TransmitFinalData();
                 finish_data_sent = 1U;
+            }
+            else
+            {
+                sprintf(printf_buffer, "State: FINISH | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
             }
             break;
     }
