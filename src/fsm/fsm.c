@@ -99,8 +99,8 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 base_speed = CLAMP(pd + MIN_MOTOR_SPEED, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
             }
             
-            left_speed = base_speed;// + correction;
-            right_speed = base_speed;// - correction;
+            left_speed = base_speed + correction;
+            right_speed = base_speed - correction;
 
             left_speed = CLAMP(left_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
             right_speed = CLAMP(right_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
@@ -162,9 +162,6 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             break;
         case STATE_ALIGN:
         {
-            current_state = STATE_WALL_FOLLOW;
-            break;
-
             uint16_t align_distance = (turn_direction < 0) ? dist_R : dist_L;
             int16_t rotation_direction = 0;
 
