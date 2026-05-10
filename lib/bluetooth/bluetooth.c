@@ -5,100 +5,8 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-#define COMM_TX_BUFFER_SIZE 192U
-
-#if COMM_UART_NUMBER == 0
-#define COMM_UBRRH UBRR0H
-#define COMM_UBRRL UBRR0L
-#define COMM_UCSRB UCSR0B
-#define COMM_UCSRC UCSR0C
-#define COMM_UDR UDR0
-#define COMM_RXEN RXEN0
-#define COMM_TXEN TXEN0
-#define COMM_UDRIE UDRIE0
-#define COMM_UCSZ0 UCSZ00
-#define COMM_UCSZ1 UCSZ01
-#define COMM_UCSZ2 UCSZ02
-#define COMM_USBS USBS0
-#define COMM_UPM0 UPM00
-#define COMM_UPM1 UPM01
-#if defined(USART0_UDRE_vect)
-#define COMM_UART_UDRE_VECTOR USART0_UDRE_vect
-#elif defined(USART_UDRE_vect)
-#define COMM_UART_UDRE_VECTOR USART_UDRE_vect
-#else
-#error "USART0 data-register-empty interrupt vector is not available."
-#endif
-#elif COMM_UART_NUMBER == 1
-#define COMM_UBRRH UBRR1H
-#define COMM_UBRRL UBRR1L
-#define COMM_UCSRB UCSR1B
-#define COMM_UCSRC UCSR1C
-#define COMM_UDR UDR1
-#define COMM_RXEN RXEN1
-#define COMM_TXEN TXEN1
-#define COMM_UDRIE UDRIE1
-#define COMM_UCSZ0 UCSZ10
-#define COMM_UCSZ1 UCSZ11
-#define COMM_UCSZ2 UCSZ12
-#define COMM_USBS USBS1
-#define COMM_UPM0 UPM10
-#define COMM_UPM1 UPM11
-#define COMM_UART_UDRE_VECTOR USART1_UDRE_vect
-#elif COMM_UART_NUMBER == 2
-#define COMM_UBRRH UBRR2H
-#define COMM_UBRRL UBRR2L
-#define COMM_UCSRB UCSR2B
-#define COMM_UCSRC UCSR2C
-#define COMM_UDR UDR2
-#define COMM_RXEN RXEN2
-#define COMM_TXEN TXEN2
-#define COMM_UDRIE UDRIE2
-#define COMM_UCSZ0 UCSZ20
-#define COMM_UCSZ1 UCSZ21
-#define COMM_UCSZ2 UCSZ22
-#define COMM_USBS USBS2
-#define COMM_UPM0 UPM20
-#define COMM_UPM1 UPM21
-#define COMM_UART_UDRE_VECTOR USART2_UDRE_vect
-#elif COMM_UART_NUMBER == 3
-#define COMM_UBRRH UBRR3H
-#define COMM_UBRRL UBRR3L
-#define COMM_UCSRB UCSR3B
-#define COMM_UCSRC UCSR3C
-#define COMM_UDR UDR3
-#define COMM_RXEN RXEN3
-#define COMM_TXEN TXEN3
-#define COMM_UDRIE UDRIE3
-#define COMM_UCSZ0 UCSZ30
-#define COMM_UCSZ1 UCSZ31
-#define COMM_UCSZ2 UCSZ32
-#define COMM_USBS USBS3
-#define COMM_UPM0 UPM30
-#define COMM_UPM1 UPM31
-#define COMM_UART_UDRE_VECTOR USART3_UDRE_vect
-#else
-#error "COMM_UART_NUMBER must be 0, 1, 2, or 3."
-#endif
-
 static char turn_buffer[COMM_MAX_TURNS];
 static volatile uint8_t turn_count = 0;
-
-static volatile char tx_buffer[COMM_TX_BUFFER_SIZE];
-static volatile uint8_t tx_head = 0;
-static volatile uint8_t tx_tail = 0;
-static volatile uint8_t tx_count = 0;
-
-static uint8_t comm_next_index(uint8_t index)
-{
-    index++;
-
-    if (index >= COMM_TX_BUFFER_SIZE) {
-        index = 0;
-    }
-
-    return index;
-}
 
 static uint8_t comm_decimal_length(uint8_t value)
 {
@@ -113,130 +21,73 @@ static uint8_t comm_decimal_length(uint8_t value)
     return 1U;
 }
 
-static uint8_t comm_sequence_length(void)
+static uint16_t comm_sequence_length(uint8_t count)
 {
-    if (turn_count == 0U) {
+    if (count == 0U) {
         return 0U;
     }
 
-    return (uint8_t)((turn_count * 2U) - 1U);
+    return (uint16_t)((uint16_t)count * 2U - 1U);
 }
 
-static uint8_t comm_final_message_length(void)
+/*
+ * Calculates the exact string length of the final report.
+ * Returns uint16_t instead of uint8_t because a max payload
+ * easily exceeds 255 bytes. Avoiding 8-bit overflow prevents false positives 
+ * in the free space check, guaranteeing we never send partial truncated messages.
+ */
+static uint16_t comm_final_message_length(uint8_t count)
 {
-    return (uint8_t)(7U + comm_decimal_length(turn_count) + 2U + 10U + comm_sequence_length() + 2U);
-}
-
-static uint8_t comm_tx_free_space(void)
-{
-    uint8_t free_space;
-    uint8_t sreg_backup = SREG;
-
-    cli();
-    free_space = (uint8_t)(COMM_TX_BUFFER_SIZE - tx_count);
-    SREG = sreg_backup;
-
-    return free_space;
-}
-
-static uint8_t comm_queue_char(char data)
-{
-    uint8_t queued = 0;
-    uint8_t sreg_backup = SREG;
-
-    cli();
-
-    if (tx_count < COMM_TX_BUFFER_SIZE) {
-        tx_buffer[tx_head] = data;
-        tx_head = comm_next_index(tx_head);
-        tx_count++;
-        COMM_UCSRB |= (1U << COMM_UDRIE);
-        queued = 1;
-    }
-
-    SREG = sreg_backup;
-
-    return queued;
-}
-
-static uint8_t comm_queue_string(const char *str)
-{
-    while (*str != '\0') {
-        if (comm_queue_char(*str) == 0U) {
-            return 0U;
-        }
-
-        str++;
-    }
-
-    return 1U;
+    return (uint16_t)(7U + comm_decimal_length(count) + 2U + 10U +
+                      comm_sequence_length(count) + 2U);
 }
 
 static uint8_t comm_queue_uint8(uint8_t value)
 {
     if (value >= 100U) {
-        if (comm_queue_char((char)('0' + (value / 100U))) == 0U) {
+        if (uart_queue_char((char)('0' + (value / 100U))) == 0U) {
             return 0U;
         }
 
         value %= 100U;
-        if (comm_queue_char((char)('0' + (value / 10U))) == 0U) {
+        if (uart_queue_char((char)('0' + (value / 10U))) == 0U) {
             return 0U;
         }
 
-        return comm_queue_char((char)('0' + (value % 10U)));
+        return uart_queue_char((char)('0' + (value % 10U)));
     }
 
     if (value >= 10U) {
-        if (comm_queue_char((char)('0' + (value / 10U))) == 0U) {
+        if (uart_queue_char((char)('0' + (value / 10U))) == 0U) {
             return 0U;
         }
 
-        return comm_queue_char((char)('0' + (value % 10U)));
+        return uart_queue_char((char)('0' + (value % 10U)));
     }
 
-    return comm_queue_char((char)('0' + value));
+    return uart_queue_char((char)('0' + value));
 }
 
-static void comm_uart_init_registers(uint32_t baud_rate)
-{
-    uint16_t ubrr_value = (uint16_t)((F_CPU / (16UL * baud_rate)) - 1UL);
-
-#if COMM_UART_NUMBER == 0
-    uart_init(baud_rate);
-#endif
-
-    COMM_UBRRH = (uint8_t)(ubrr_value >> 8);
-    COMM_UBRRL = (uint8_t)ubrr_value;
-
-    COMM_UCSRB = 0;
-    COMM_UCSRB |= (1U << COMM_RXEN) | (1U << COMM_TXEN);
-    COMM_UCSRB &= (uint8_t)~(1U << COMM_UCSZ2);
-
-    COMM_UCSRC = (1U << COMM_UCSZ1) | (1U << COMM_UCSZ0);
-    COMM_UCSRC &= (uint8_t)~((1U << COMM_USBS) | (1U << COMM_UPM1) | (1U << COMM_UPM0));
-}
-
+/*
+ * Initialize the Bluetooth communications.
+ * All USART configuration and ISR logic has been stripped from this file and 
+ * delegated to uart.c. This makes bluetooth.c a pure protocol layer, removing 
+ * the hardware conflicts where both files competed for USART0 registers.
+ */
 void COMM_Init(void)
 {
     uint8_t sreg_backup = SREG;
 
+    uart_init(COMM_BAUD_RATE);
+
     cli();
-
     turn_count = 0;
-    tx_head = 0;
-    tx_tail = 0;
-    tx_count = 0;
-
-    comm_uart_init_registers(COMM_BAUD_RATE);
-
     SREG = sreg_backup;
-    sei();
 }
 
 uint8_t COMM_LogTurn(char turn_direction)
 {
-    uint8_t logged = 0;
+    uint8_t logged = 0U;
     uint8_t sreg_backup = SREG;
 
     if ((turn_direction != 'L') && (turn_direction != 'R')) {
@@ -256,39 +107,57 @@ uint8_t COMM_LogTurn(char turn_direction)
     return logged;
 }
 
+/*
+ * Transmits the final sequence of turns when the run finishes.
+ * 
+ * We create a local snapshot array (turns_snapshot) inside an atomic block
+ * (ISRs disabled) before serializing it. This ensures that if COMM_LogTurn 
+ * gets triggered by an interrupt mid-transmission, it won't corrupt the buffer
+ * while we are actively iterating through it.
+ */
 uint8_t COMM_TransmitFinalData(void)
 {
+    char turns_snapshot[COMM_MAX_TURNS];
+    uint8_t count;
     uint8_t i;
+    uint8_t sreg_backup = SREG;
 
-    if (comm_tx_free_space() < comm_final_message_length()) {
+    cli();
+    count = turn_count;
+    for (i = 0U; i < count; i++) {
+        turns_snapshot[i] = turn_buffer[i];
+    }
+    SREG = sreg_backup;
+
+    if (uart_tx_free_space() < comm_final_message_length(count)) {
         return 0U;
     }
 
-    if (comm_queue_string("Turns: ") == 0U) {
+    if (uart_queue_string("Turns: ") == 0U) {
         return 0U;
     }
 
-    if (comm_queue_uint8(turn_count) == 0U) {
+    if (comm_queue_uint8(count) == 0U) {
         return 0U;
     }
 
-    if (comm_queue_string("\r\nSequence: ") == 0U) {
+    if (uart_queue_string("\r\nSequence: ") == 0U) {
         return 0U;
     }
 
-    for (i = 0; i < turn_count; i++) {
+    for (i = 0U; i < count; i++) {
         if (i > 0U) {
-            if (comm_queue_char(',') == 0U) {
+            if (uart_queue_char(',') == 0U) {
                 return 0U;
             }
         }
 
-        if (comm_queue_char(turn_buffer[i]) == 0U) {
+        if (uart_queue_char(turns_snapshot[i]) == 0U) {
             return 0U;
         }
     }
 
-    return comm_queue_string("\r\n");
+    return uart_queue_string("\r\n");
 }
 
 void COMM_ResetTurns(void)
@@ -302,7 +171,7 @@ void COMM_ResetTurns(void)
 
 uint8_t COMM_IsTransmitBusy(void)
 {
-    return (comm_tx_free_space() != COMM_TX_BUFFER_SIZE) ? 1U : 0U;
+    return uart_tx_is_busy();
 }
 
 uint8_t COMM_GetTurnCount(void)
@@ -331,16 +200,5 @@ void COMM_Test(void)
         COMM_ResetTurns();
 
         _delay_ms(3000);
-    }
-}
-
-ISR(COMM_UART_UDRE_VECTOR)
-{
-    if (tx_count > 0U) {
-        COMM_UDR = tx_buffer[tx_tail];
-        tx_tail = comm_next_index(tx_tail);
-        tx_count--;
-    } else {
-        COMM_UCSRB &= (uint8_t)~(1U << COMM_UDRIE);
     }
 }

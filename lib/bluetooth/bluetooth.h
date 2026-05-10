@@ -12,20 +12,12 @@
 #endif
 
 /*
- * Arduino Uno/Nano use USART0 for the HC05 connection.
- * On Arduino Mega, COMM_UART_NUMBER can be set to 1, 2, or 3 later if the
- * Bluetooth module is moved to a spare hardware UART.
- */
-#ifndef COMM_UART_NUMBER
-#define COMM_UART_NUMBER 0
-#endif
-
-/*
- * Initializes the UART peripheral used by the HC05 Bluetooth module.
+ * Initializes the shared UART peripheral used by the HC05 Bluetooth module.
  *
- * This configures the selected USART for COMM_BAUD_RATE, 8 data bits,
- * no parity, and 1 stop bit. It also clears the internal turn log and
- * transmit queue.
+ * This configures USART0 for COMM_BAUD_RATE, 8 data bits, no parity,
+ * and 1 stop bit. It also clears the internal turn log. All UART output
+ * goes through the uart.c ring buffer so debug text and final reports
+ * cannot race on UDR0.
  *
  * Call this once during system initialization, before the FSM starts.
  */

@@ -13,21 +13,18 @@
 
 void init_system() {
     motor_init();
-    uart_init(9600);
-    encoder_init();
-    ultrasonic_init();
     COMM_Init();
+    ultrasonic_init();
     timer2_init_millis();
+    encoder_init();
     fsm_init();
 }
 
 
-void main_loop(char* print_buffer)
+void main_loop(char* print_buffer, size_t print_buffer_size)
 {
-    for (int i = 0; i < 5; i++) {
-        ultrasonic_full_sweep();
-    }
-    uint32_t last_ping_time = 0;
+    uint32_t last_ping_time = (uint32_t)(get_millis() - PING_INTERVAL_MS);
+
     while(1)
     {
         uint32_t current_time = get_millis();
@@ -42,11 +39,7 @@ void main_loop(char* print_buffer)
         uint16_t left_dist  = ultrasonic_get_distance(US_LEFT);
         uint16_t right_dist = ultrasonic_get_distance(US_RIGHT);
         
-        fsm_update(left_dist, right_dist, front_dist, print_buffer);
-
-        //sprintf(print_buffer, "time: %lu ms | F: %3u mm | State: %d\r\n", current_time, front_dist, current_state);
-        //sprintf(print_buffer, "time: %lu | F: %3u mm | L: %3u mm | R: %3u mm\r\n", current_time, front_dist, left_dist, right_dist);
-        uart_send_string(print_buffer);
+        fsm_update(left_dist, right_dist, front_dist, print_buffer, print_buffer_size);
     }
 }
 int main()
@@ -54,7 +47,7 @@ int main()
     init_system();
 
     char print_buffer[128];
-    main_loop(print_buffer);
+    main_loop(print_buffer, sizeof(print_buffer));
     //testing();
 
     return 0;
@@ -73,15 +66,16 @@ void triple_ultrasonic_test(char* print_buffer) {
         uint16_t left_distance = ultrasonic_get_distance(US_LEFT);
         uint16_t right_distance = ultrasonic_get_distance(US_RIGHT);
         if (current_time - last_ping_time >= PING_INTERVAL_MS) {
-            sprintf(print_buffer, "%3u %lu ms\r\n", front_distance,current_time - last_ping_time);
+            sprintf(print_buffer, "F:%3u L:%3u R:%3u %lu ms\r\n",
+                    front_distance,
+                    left_distance,
+                    right_distance,
+                    current_time - last_ping_time);
             uart_send_string(print_buffer);
             ultrasonic_next();
             last_ping_time = current_time;
         }
 
-
-        //sprintf(print_buffer, "time: %lu | F: %3u mm | L: %3u mm | R: %3u mm | Time: %lu ms\r\n", get_millis(), front_distance, left_distance, right_distance, get_time());
-        // uart_send_string(print_buffer);
     }
 }
 
