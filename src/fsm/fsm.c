@@ -28,7 +28,6 @@
 #define LOST_WALL_SPEED 70
 #define TURN_SPEED 80
 #define ALIGN_SPEED 60
-#define TICKS_FOR_90_DEG 280
 
 #define ALIGN_FRONT_CLEAR_DIST 250
 #define ALIGN_TOLERANCE_MM 20
@@ -40,11 +39,15 @@
 
 #define MIN_MOTOR_SPEED 30
 #define DECISION_TIME_MS 250
+#define TICKS_FOR_90_DEG 270
 
 volatile RobotState_t current_state = STATE_WALL_FOLLOW;
 PD_Controller_t wall_pd;
 PD_Controller_t align_pd;
 PD_Controller_t brake_pd;
+
+int16_t get_correction(uint16_t dist_L);
+int16_t get_braking_speed(uint16_t dist_F, int16_t max_speed);
 
 void fsm_init(void)
 {
@@ -86,18 +89,9 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 current_state = STATE_LOST_WALL;
                 break;
             }
-            error = (float)dist_L - TARGET_WALL_DIST;
-            correction = pd_compute(&wall_pd, error);
-            correction = CLAMP(correction, -MAX_CORRECTION, MAX_CORRECTION);
+            correction = get_correction(dist_L);
             
-            int16_t base_speed = WALL_FOLLOW_SPEED;
-            
-            if (dist_F < SLOWDOWN_FRONT_DIST) {
-                float brake_error = (float)dist_F - CRITICAL_FRONT_DIST;
-                int16_t pd = pd_compute(&brake_pd, brake_error);
-                
-                base_speed = CLAMP(pd + MIN_MOTOR_SPEED, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
-            }
+            int16_t base_speed = get_braking_speed(dist_F, WALL_FOLLOW_SPEED);
             
             left_speed = base_speed + correction;
             right_speed = base_speed - correction;
@@ -153,7 +147,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
             if (((enc_left + enc_right) / 2) >= TICKS_FOR_90_DEG) {
                 motor_stop();
-                current_state = STATE_ALIGN;
+                current_state = STATE_WALL_FOLLOW;
             } else {
                 motor_set_speed(turn_direction * TURN_SPEED, -turn_direction * TURN_SPEED);
             }
@@ -231,7 +225,8 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 break;
             }
 
-            motor_set_speed(LOST_WALL_SPEED, LOST_WALL_SPEED);
+            uint16_t speed = get_braking_speed(dist_F, LOST_WALL_SPEED);
+            motor_set_speed(speed, speed);
             break;
         }
         case STATE_FINISH:
@@ -240,10 +235,30 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
                 COMM_TransmitFinalData();
                 finish_data_sent = 1U;
             }
-            else
-            {
-                sprintf(printf_buffer, "State: FINISH | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
-            }
+            // else
+            // {
+            //     sprintf(printf_buffer, "State: FINISH | F: %3u mm | L: %3u mm | R: %3u mm\r\n", dist_F, dist_L, dist_R);
+            // }
             break;
     }
+}
+
+
+int16_t get_braking_speed(uint16_t dist_F, int16_t max_speed)
+{    
+    if (dist_F < SLOWDOWN_FRONT_DIST) {
+        float brake_error = (float)dist_F - CRITICAL_FRONT_DIST;
+        int16_t pd = pd_compute(&brake_pd, brake_error);
+        
+        return CLAMP(pd + MIN_MOTOR_SPEED, MIN_MOTOR_SPEED, max_speed);
+    }
+    return max_speed;
+}
+
+int16_t get_correction(uint16_t dist_L)
+{
+    return 0;
+    float error = (float)dist_L - TARGET_WALL_DIST;
+    int16_t correction = pd_compute(&wall_pd, error);
+    return CLAMP(correction, -MAX_CORRECTION, MAX_CORRECTION);
 }
