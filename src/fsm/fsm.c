@@ -149,8 +149,6 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
         }
         case STATE_TURN_LEFT:
         case STATE_TURN_RIGHT:
-            current_state = STATE_WALL_FOLLOW;
-            break;
             encoder_get_both_ticks(&enc_left, &enc_right);
             sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
             if (((enc_left + enc_right) / 2) >= TICKS_FOR_90_DEG) {
