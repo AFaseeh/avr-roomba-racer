@@ -99,7 +99,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
 
             left_speed = CLAMP(left_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
             right_speed = CLAMP(right_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
-            sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm, speeds L: %d R: %d\r\n", dist_F, dist_L, dist_R, left_speed, right_speed);
+            // sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm, speeds L: %d R: %d\r\n", dist_F, dist_L, dist_R, left_speed, right_speed);
             // sprintf(printf_buffer, "State: WALL_FOLLOW | F: %3u mm | L: %3u mm | R: %3u mm | Error: %d | Correction: %d\r\n", dist_F, dist_L, dist_R, (int)error, correction);
             motor_set_speed(left_speed, right_speed);
             break;
@@ -150,7 +150,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
         case STATE_TURN_LEFT:
         case STATE_TURN_RIGHT:
             encoder_get_both_ticks(&enc_left, &enc_right);
-            sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
+            // sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
             if (((enc_left + enc_right) / 2) >= TICKS_FOR_90_DEG) {
                 motor_stop();
                 current_state = STATE_POST_TURN;
@@ -164,10 +164,10 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             uint16_t align_distance = (turn_direction < 0) ? dist_R : dist_L;
             int16_t rotation_direction = 0;
 
-            sprintf(printf_buffer,
-                    "State: ALIGN | RefF: %3u mm | Align: %3u mm\r\n",
-                    decision_front_reference,
-                    align_distance);
+            // sprintf(printf_buffer,
+            //         "State: ALIGN | RefF: %3u mm | Align: %3u mm\r\n",
+            //         decision_front_reference,
+            //         align_distance);
 
             if ((decision_front_reference == INVALID_DISTANCE_MM) ||
                 (align_distance == INVALID_DISTANCE_MM)) {
@@ -206,11 +206,11 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             uint8_t right_open = ((dist_R == INVALID_DISTANCE_MM) || (dist_R > FINISH_OPEN_SIDE_DIST)) ? 1U : 0U;
             uint8_t front_open = ((dist_F == INVALID_DISTANCE_MM) || (dist_F > FINISH_OPEN_FRONT_DIST)) ? 1U : 0U;
 
-            sprintf(printf_buffer, "State: LOST_WALL | F: %3u mm | L: %3u mm | R: %3u mm | elapsed: %lu\r\n",
-                    dist_F,
-                    dist_L,
-                    dist_R,
-                    (unsigned long)(get_millis() - lost_wall_start_ms));
+            // sprintf(printf_buffer, "State: LOST_WALL | F: %3u mm | L: %3u mm | R: %3u mm | elapsed: %lu\r\n",
+            //         dist_F,
+            //         dist_L,
+            //         dist_R,
+            //         (unsigned long)(get_millis() - lost_wall_start_ms));
 
             if (dist_F < CRITICAL_FRONT_DIST) {
                 motor_stop();

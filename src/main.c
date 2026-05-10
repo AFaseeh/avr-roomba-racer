@@ -46,7 +46,7 @@ void main_loop(char* print_buffer)
 
         //sprintf(print_buffer, "time: %lu ms | F: %3u mm | State: %d\r\n", current_time, front_dist, current_state);
         //sprintf(print_buffer, "time: %lu | F: %3u mm | L: %3u mm | R: %3u mm\r\n", current_time, front_dist, left_dist, right_dist);
-        uart_send_string(print_buffer);
+        //uart_send_string(print_buffer);
     }
 }
 int main()
