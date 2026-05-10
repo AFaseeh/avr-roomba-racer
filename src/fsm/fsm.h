@@ -14,7 +14,8 @@ typedef enum { // TODO: maybe add a backward state to get away from the wall if 
     STATE_TURN_RIGHT,
     STATE_ALIGN,        // TODO: use Ultrasonic to align with the wall after turning, maybe use PD control here as well? or just turn until we see the wall at the right distance?
     STATE_LOST_WALL,    // TODO: if we lost the wall for more than 1 sec, we can assume we are in the finish line (since there is no wall at the finish line) and then we can stop and transmit the data
-    STATE_FINISH        
+    STATE_FINISH,
+    STATE_POST_TURN       
 } RobotState_t;
 
 extern volatile RobotState_t current_state;

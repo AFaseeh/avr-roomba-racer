@@ -11,8 +11,8 @@
 
 // Wall following
 //#define KP 0.1f
-#define KD 0.2f
-#define MAX_CORRECTION 20
+#define KD 0.05f
+#define MAX_CORRECTION 10
 #define TARGET_WALL_DIST    150
 #define MIN_WALL_DIST       100
 
@@ -22,9 +22,9 @@
 
 #define ALIGN_KP 0.8f
 #define ALIGN_KD 0.3f
-#define CRITICAL_FRONT_DIST 150     // Front
-#define SLOWDOWN_FRONT_DIST 350
-#define WALL_FOLLOW_SPEED 100
+#define CRITICAL_FRONT_DIST 200     // Front
+#define SLOWDOWN_FRONT_DIST 500
+#define WALL_FOLLOW_SPEED 80
 #define LOST_WALL_SPEED 70
 #define TURN_SPEED 80
 #define ALIGN_SPEED 60
@@ -39,7 +39,7 @@
 
 #define MIN_MOTOR_SPEED 30
 #define DECISION_TIME_MS 250
-#define TICKS_FOR_90_DEG 270
+#define TICKS_FOR_90_DEG 310
 
 volatile RobotState_t current_state = STATE_WALL_FOLLOW;
 PD_Controller_t wall_pd;
@@ -73,6 +73,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
     static uint32_t lost_wall_start_ms = 0;
     static uint16_t decision_front_reference = INVALID_DISTANCE_MM;
     static uint32_t decision_start_ms = 0;
+    static uint32_t post_turn_ms = 0;
 
     //sprintf(printf_buffer, "State: %d | F: %3u mm | L: %3u mm | R: %3u mm\r\n", current_state, dist_F, dist_L, dist_R);
     //uart_send_string(printf_buffer);
@@ -93,8 +94,8 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             
             int16_t base_speed = get_braking_speed(dist_F, WALL_FOLLOW_SPEED);
             
-            left_speed = base_speed + correction;
-            right_speed = base_speed - correction;
+            left_speed = base_speed - correction;
+            right_speed = base_speed + correction;
 
             left_speed = CLAMP(left_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
             right_speed = CLAMP(right_speed, MIN_MOTOR_SPEED, WALL_FOLLOW_SPEED);
@@ -141,13 +142,19 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             }
             break;
         }
+        case STATE_POST_TURN:
+            if ((get_millis() - post_turn_ms) < DECISION_TIME_MS) {
+                current_state = STATE_WALL_FOLLOW;
+            }
+            break;
         case STATE_TURN_LEFT:
         case STATE_TURN_RIGHT:
             encoder_get_both_ticks(&enc_left, &enc_right);
             sprintf(printf_buffer, "State: TURNING %d | L: %lu | R: %lu\r\n", turn_direction, enc_left, enc_right);
             if (((enc_left + enc_right) / 2) >= TICKS_FOR_90_DEG) {
                 motor_stop();
-                current_state = STATE_WALL_FOLLOW;
+                current_state = STATE_POST_TURN;
+                post_turn_ms = get_millis();
             } else {
                 motor_set_speed(turn_direction * TURN_SPEED, -turn_direction * TURN_SPEED);
             }
@@ -257,7 +264,10 @@ int16_t get_braking_speed(uint16_t dist_F, int16_t max_speed)
 
 int16_t get_correction(uint16_t dist_L)
 {
-    return 0;
+    if (dist_L == INVALID_DISTANCE_MM || dist_L > 500) {
+        return 0;
+    }
+
     float error = (float)dist_L - TARGET_WALL_DIST;
     int16_t correction = pd_compute(&wall_pd, error);
     return CLAMP(correction, -MAX_CORRECTION, MAX_CORRECTION);

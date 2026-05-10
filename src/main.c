@@ -124,3 +124,7 @@ void encoder_test(char* print_buffer) {
     }
 }
 
+void motor_test() {
+    while(1)
+        motor_set_speed(100, 100);
+}
