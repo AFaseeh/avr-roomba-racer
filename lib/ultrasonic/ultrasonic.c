@@ -21,9 +21,9 @@
 #define RIGHT_ECHO_PORT PORT_C
 #define RIGHT_ECHO_PIN  3  // A3 (PCINT11)
 
-// Timer1 runs at 2 MHz (0.5 us/tick), so 60,000 ticks is about 30 ms.
+// Timer1 runs at 2 MHz (0.5 us/tick), so 22,000 ticks is about 11 ms.
 // This is long enough for normal HC-SR04 echoes and short enough to fit in uint16_t.
-#define ULTRASONIC_TIMEOUT_TICKS 60000U
+#define ULTRASONIC_TIMEOUT_TICKS 22000U
 
 // The 4 states of our Ultrasonic State Machine
 typedef enum {
@@ -165,6 +165,12 @@ uint16_t ultrasonic_filter_reading(UltrasonicID_t id)
     }
     sum -= max + min; // Remove outliers
     return (uint16_t)(sum / 3);
+}
+
+uint32_t get_time()
+{
+    uint16_t ticks = end_time[US_FRONT] - start_time[US_FRONT];
+    return (uint32_t)(ticks / 2);
 }
 
 uint16_t calculate_distance(uint16_t last, uint16_t current) {

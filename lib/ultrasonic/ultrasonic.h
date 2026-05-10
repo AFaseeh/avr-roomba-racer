@@ -27,4 +27,6 @@ void ultrasonic_next(void);
 void ultrasonic_full_sweep(void);
 
 uint16_t ultrasonic_filter_reading(UltrasonicID_t id);
+
+uint32_t get_time();
 #endif /* ULTRASONIC_H */

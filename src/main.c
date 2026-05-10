@@ -9,7 +9,7 @@
 #include "fsm/fsm.h"
 
 #define TICKS_FOR_90_DEG 10
-#define PING_INTERVAL_MS 50
+#define PING_INTERVAL_MS 15
 
 void init_system() {
     motor_init();
@@ -68,21 +68,20 @@ void triple_ultrasonic_test(char* print_buffer) {
     uint32_t last_ping_time = 0;
 
     while (1) {
-        ultrasonic_next();
         uint32_t current_time = get_millis();
+        uint16_t front_distance = ultrasonic_get_distance(US_FRONT);
+        uint16_t left_distance = ultrasonic_get_distance(US_LEFT);
+        uint16_t right_distance = ultrasonic_get_distance(US_RIGHT);
         if (current_time - last_ping_time >= PING_INTERVAL_MS) {
+            sprintf(print_buffer, "%3u %lu ms\r\n", front_distance,current_time - last_ping_time);
+            uart_send_string(print_buffer);
             ultrasonic_next();
             last_ping_time = current_time;
         }
 
-        uint16_t front_distance = ultrasonic_get_distance(US_FRONT);
-        uint16_t left_distance = ultrasonic_get_distance(US_LEFT);
-        uint16_t right_distance = ultrasonic_get_distance(US_RIGHT);
 
-        sprintf(print_buffer, "F: %3u mm | L: %3u mm | R: %3u mm\r\n", front_distance, left_distance, right_distance);
-        uart_send_string(print_buffer);
-
-        _delay_ms(100);
+        //sprintf(print_buffer, "time: %lu | F: %3u mm | L: %3u mm | R: %3u mm | Time: %lu ms\r\n", get_millis(), front_distance, left_distance, right_distance, get_time());
+        // uart_send_string(print_buffer);
     }
 }
 
