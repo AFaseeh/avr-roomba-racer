@@ -1,6 +1,7 @@
 #ifndef FSM_H
 #define FSM_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 
@@ -21,6 +22,7 @@ extern volatile RobotState_t current_state;
 
 void fsm_init(void);
 
-void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_buffer);
+void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F,
+                char *printf_buffer, size_t printf_buffer_size);
 
 #endif /* FSM_H */
