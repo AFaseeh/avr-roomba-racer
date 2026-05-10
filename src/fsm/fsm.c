@@ -143,7 +143,7 @@ void fsm_update(uint16_t dist_L, uint16_t dist_R, uint16_t dist_F, char* printf_
             break;
         }
         case STATE_POST_TURN:
-            if ((get_millis() - post_turn_ms) < DECISION_TIME_MS) {
+            if ((get_millis() - post_turn_ms) >= DECISION_TIME_MS) {
                 current_state = STATE_WALL_FOLLOW;
             }
             break;
