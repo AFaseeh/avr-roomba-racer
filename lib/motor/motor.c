@@ -25,8 +25,13 @@ void motor_init(void) {
 }
 
 void motor_set_speed(int8_t left_speed, int8_t right_speed) {
+    // Motors are swapped and oriented in opposite directions, so we need to swap and invert one side
+    int8_t temp = -left_speed;
+    left_speed = right_speed;
+    right_speed = temp;
+
     left_speed = CLAMP(left_speed, -100, 100);
-    right_speed = -1 * CLAMP(right_speed, -100, 100);
+    right_speed = CLAMP(right_speed, -100, 100);
 
     if (left_speed > 0) {
         // Forward

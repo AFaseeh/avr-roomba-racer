@@ -24,6 +24,7 @@
 // Timer1 runs at 2 MHz (0.5 us/tick), so 22,000 ticks is about 11 ms.
 // This is long enough for normal HC-SR04 echoes and short enough to fit in uint16_t.
 #define ULTRASONIC_TIMEOUT_TICKS 22000U
+#define INVALID_DISTANCE_MM 0xFFFFU
 
 // The 4 states of our Ultrasonic State Machine
 typedef enum {
@@ -63,6 +64,9 @@ static void ultrasonic_check_timeouts(void)
         if (us_state[sensor_index] != US_IDLE) {
             uint16_t elapsed_ticks = (uint16_t)(current_time - trigger_time[sensor_index]);
             if (elapsed_ticks > ULTRASONIC_TIMEOUT_TICKS) {
+                filters[sensor_index].readings[filters[sensor_index].index] = INVALID_DISTANCE_MM;
+                filters[sensor_index].index = (filters[sensor_index].index + 1) % 5;
+                last_sensor = (UltrasonicID_t)sensor_index;
                 ultrasonic_reset_measurement((UltrasonicID_t)sensor_index);
             }
         }
@@ -163,7 +167,8 @@ uint16_t ultrasonic_filter_reading(UltrasonicID_t id)
         max = MAX(max, filters[id].readings[i]);
         min = MIN(min, filters[id].readings[i]);
     }
-    sum -= max + min; // Remove outliers
+    sum -= max; // Remove outliers
+    sum -= min;
     return (uint16_t)(sum / 3);
 }
 

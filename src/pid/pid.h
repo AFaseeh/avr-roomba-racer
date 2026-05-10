@@ -9,6 +9,8 @@ typedef struct {
     float Kp;
     float Kd;
     float prev_error;
+    uint32_t prev_time;
+    float last_d;
 } PD_Controller_t;
 
 void pd_init(PD_Controller_t *pd, float kp, float kd);
